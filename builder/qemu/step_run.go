@@ -261,6 +261,16 @@ func (s *stepRun) getDeviceAndDriveArgs(config *Config, state multistep.StateBag
 			if config.DetectZeroes != "off" {
 				driveArgumentString = fmt.Sprintf("%s,detect-zeroes=%s", driveArgumentString, config.DetectZeroes)
 			}
+			// Add bootindex for disk devices when configured
+			if config.DiskBootIndex > 0 {
+				if config.DiskInterface == "virtio-scsi" {
+					// For virtio-scsi, bootindex is added to the scsi-hd device
+					deviceArgs[len(deviceArgs)-1] = fmt.Sprintf("%s,bootindex=%d", deviceArgs[len(deviceArgs)-1], config.DiskBootIndex)
+				} else {
+					// For other interfaces, add bootindex to the drive string
+					driveArgumentString = fmt.Sprintf("%s,bootindex=%d", driveArgumentString, config.DiskBootIndex)
+				}
+			}
 			driveArgs = append(driveArgs, driveArgumentString)
 		}
 	} else {
@@ -286,15 +296,28 @@ func (s *stepRun) getDeviceAndDriveArgs(config *Config, state multistep.StateBag
 	for i, cdPath := range cdPaths {
 		if config.CDROMInterface == "" {
 			driveArgs = append(driveArgs, fmt.Sprintf("file=%s,media=cdrom", cdPath))
+			// Add bootindex for CD-ROM when using default interface
+			if config.CdromBootIndex > 0 {
+				driveArgs[len(driveArgs)-1] = fmt.Sprintf("%s,bootindex=%d", driveArgs[len(driveArgs)-1], config.CdromBootIndex)
+			}
 		} else if config.CDROMInterface == "virtio-scsi" {
 			if availableScsiIndex == 0 {
 				deviceArgs = append(deviceArgs, fmt.Sprintf("virtio-scsi-pci,id=scsi%d", 0))
 			}
 			driveArgs = append(driveArgs, fmt.Sprintf("file=%s,if=none,index=%d,id=cdrom%d,media=cdrom", cdPath, availableScsiIndex, i))
-			deviceArgs = append(deviceArgs, "virtio-scsi-device", fmt.Sprintf("scsi-cd,drive=cdrom%d", i))
+			cdDeviceArg := fmt.Sprintf("scsi-cd,drive=cdrom%d", i)
+			// Add bootindex for CD-ROM when using virtio-scsi
+			if config.CdromBootIndex > 0 {
+				cdDeviceArg = fmt.Sprintf("%s,bootindex=%d", cdDeviceArg, config.CdromBootIndex)
+			}
+			deviceArgs = append(deviceArgs, cdDeviceArg)
 			availableScsiIndex += 1
 		} else {
 			driveArgs = append(driveArgs, fmt.Sprintf("file=%s,if=%s,index=%d,id=cdrom%d,media=cdrom", cdPath, config.CDROMInterface, i, i))
+			// Add bootindex for CD-ROM when using other interfaces
+			if config.CdromBootIndex > 0 {
+				driveArgs[len(driveArgs)-1] = fmt.Sprintf("%s,bootindex=%d", driveArgs[len(driveArgs)-1], config.CdromBootIndex)
+			}
 		}
 	}
 
@@ -315,6 +338,13 @@ func (s *stepRun) getDeviceAndDriveArgs(config *Config, state multistep.StateBag
 	// TPM
 	if config.VTPM {
 		deviceArgs = append(deviceArgs, fmt.Sprintf("%s,tpmdev=tpm0", config.TPMType))
+	}
+
+	// Add USB input devices (keyboard and tablet) for headless mode when enabled
+	// This is critical for ARM64 virt machines which don't have default input devices
+	if config.AddUSBInputDevices != nil && *config.AddUSBInputDevices {
+		deviceArgs = append(deviceArgs, "usb-kbd")
+		deviceArgs = append(deviceArgs, "usb-tablet")
 	}
 
 	return deviceArgs, driveArgs

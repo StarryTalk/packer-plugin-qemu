@@ -1,5 +1,46 @@
-main
-dist/*
-packer-plugin-scaffolding
-example/output-ubuntu1804
-crash.log
+```
+# Go-specific ignores
+*.o
+*.a
+*.so
+*.exe
+*.dll
+*.out
+*.test
+*.prof
+coverage.out
+
+# Dependencies
+vendor/
+Godeps/
+
+# Build artifacts
+bin/
+pkg/
+*.mod
+*.sum
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+```

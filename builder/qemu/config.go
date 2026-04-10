@@ -659,6 +659,24 @@ type Config struct {
 	// forcing users of RHEL9 on x86_64 systems to define this. "host" is a
 	// reasonable value if using an hypervisor.
 	CPUModel string `mapstructure:"cpu_model" required:"false"`
+	// The boot index to use for the disk device. This controls the boot order
+	// when multiple bootable devices are present. Lower values have higher priority.
+	// This is especially important for UEFI boots where the CD-ROM may otherwise
+	// take precedence over the disk after installation completes.
+	// Defaults to `1` for the primary disk.
+	DiskBootIndex int `mapstructure:"disk_bootindex" required:"false"`
+	// The boot index to use for the CD-ROM device. This controls the boot order
+	// when multiple bootable devices are present. Lower values have higher priority.
+	// Setting this to a higher value than `disk_bootindex` ensures the VM boots
+	// from the disk after installation completes, preventing reboot loops.
+	// Defaults to `2` for CD-ROM devices.
+	CdromBootIndex int `mapstructure:"cdrom_bootindex" required:"false"`
+	// Automatically add USB keyboard and tablet devices when using headless mode
+	// with machine types that don't provide default input devices (e.g., ARM64 virt).
+	// This is required for boot_command to work properly over VNC on ARM64 systems.
+	// Defaults to `true` when architecture is ARM64 and machine_type is "virt",
+	// otherwise defaults to `false`.
+	AddUSBInputDevices *bool `mapstructure:"add_usb_input_devices" required:"false"`
 
 	// TODO(mitchellh): deprecate
 	RunOnce bool `mapstructure:"run_once"`
@@ -917,6 +935,25 @@ func (c *Config) Prepare(raws ...interface{}) ([]string, error) {
 
 	if c.QemuArgs == nil {
 		c.QemuArgs = make([][]string, 0)
+	}
+
+	// Set default boot indices if not specified
+	if c.DiskBootIndex == 0 {
+		c.DiskBootIndex = 1
+	}
+	if c.CdromBootIndex == 0 {
+		c.CdromBootIndex = 2
+	}
+
+	// Auto-enable USB input devices for ARM64 virt machine in headless mode
+	if c.AddUSBInputDevices == nil {
+		if runtime.GOARCH == "arm64" && c.MachineType == "virt" && c.Headless {
+			enabled := true
+			c.AddUSBInputDevices = &enabled
+		} else {
+			disabled := false
+			c.AddUSBInputDevices = &disabled
+		}
 	}
 
 	if errs != nil && len(errs.Errors) > 0 {
